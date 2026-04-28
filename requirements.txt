@@ -6,6 +6,7 @@ beautifulsoup4==4.12.3
 langchain==0.2.16
 langchain-openai==0.1.25
 langchain-chroma==0.1.4
+langchain-groq
  
 # vector DB
 chromadb==0.5.0
