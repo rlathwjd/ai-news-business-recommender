@@ -7,12 +7,14 @@ langchain==0.2.16
 langchain-openai==0.1.25
 langchain-chroma==0.1.4
 langchain-groq
+langchain-community
  
 # vector DB
 chromadb==0.5.0
  
 # LLM
 openai==1.50.0
+sentence-transformers
  
 # UI
 streamlit==1.38.0
