@@ -9,10 +9,6 @@ venv/
 __pycache__/
 *.pyc
 
-# 벡터 DB
-chroma_db/
-chroma/
-
 # 데이터 (크롤링 결과)
 data/*.json
 data/raw/
