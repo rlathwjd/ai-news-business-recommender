@@ -13,10 +13,10 @@
 - Groq API
 
 ## 실행 방법(터미널)
-.env 파일에 GROQ_API_KEY="api_key" 입력
-py -3.12 -m venv venv (파이썬 3.12 설치 후 가상환경 생성)
-venv/Scripts/activate (가상환경 활성화)
-python -m pip install -r requirements.txt (필요 패키지 설치)
-python crawler/aitimes_crawler.py (크롤링)
-python rag/embedder.py (임베딩)
-python -m streamlit run app.py
+- .env 파일에 GROQ_API_KEY="api_key" 입력
+- py -3.12 -m venv venv (파이썬 3.12 설치 후 가상환경 생성)
+- venv/Scripts/activate (가상환경 활성화)
+- python -m pip install -r requirements.txt (필요 패키지 설치)
+- python crawler/aitimes_crawler.py (크롤링)
+- python rag/embedder.py (임베딩)
+- python -m streamlit run app.py
