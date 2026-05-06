@@ -1,16 +1,11 @@
-"""
-RAG 체인 모듈 (Groq API 버전)
-검색된 청크 + Groq LLM으로 최종 답변 생성
-"""
-
 import os
 import sys
 from dotenv import load_dotenv
 
 from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_groq import ChatGroq
+from datetime import datetime
 
 sys.path.append(".")
 from rag.embedder import load_chromadb
@@ -18,30 +13,29 @@ from rag.embedder import load_chromadb
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-# Groq 지원 모델 예시
 LLM_MODEL = "llama-3.3-70b-versatile"
-# 빠른/가벼운 모델을 쓰고 싶으면:
-# LLM_MODEL = "llama-3.1-8b-instant"
 
-SYSTEM_PROMPT = """당신은 AI 기술 동향을 분석하고 LG CNS의 신규 사업 아이템을 추천하는 전문 애널리스트입니다.
-아래 제공된 AI타임스 최신 기사를 기반으로만 답변하세요.
 
-LG CNS 사업 영역:
-- 공공 SI (정부, 공공기관 시스템 구축)
-- 금융 IT (은행, 보험, 증권 시스템)
-- 제조 DX (스마트팩토리, 생산 자동화)
-- 클라우드 MSP (AWS, Azure, GCP 운영 관리)
-- 물류/유통 IT
+INDUSTRY_PROMPT = """
+당신은 AI 기술 동향을 분석하고 신규 사업 아이템을 추천하는 전문 애널리스트입니다.
+아래 제공된 AI타임스 최신 기사 내용을 기반으로만 답변하세요.
+
+사용자가 선택한 산업:
+{industry}
 
 답변 규칙:
-1. 반드시 제공된 기사 내용을 근거로만 답변하세요
-2. 기사에 없는 내용은 "기사에서 확인되지 않았습니다"라고 하세요
-3. 사업 추천 시 아래 형식을 따르세요
-   - 사업명:
-   - 관련 AI 트렌드:
-   - LG CNS 적용 포인트:
-   - 근거 기사:
+1. 반드시 제공된 기사 내용을 근거로만 답변하세요.
+2. 사용자가 선택한 산업인 "{industry}"과 관련성이 높은 기사 내용을 우선 분석하세요.
+3. "{industry}" 산업에 적용 가능한 신규 AI 사업 아이템을 추천하세요.
+4. 기사에 없는 내용은 "기사에서 확인되지 않았습니다"라고 답변하세요.
+
+답변 형식:
+- 사업명:
+- 대상 산업:
+- 관련 AI 트렌드:
+- 근거 기사:
+- 기대 효과:
+- 추천 이유:
 
 [참고 기사]
 {context}
@@ -49,7 +43,52 @@ LG CNS 사업 영역:
 [질문]
 {question}
 
-[답변]"""
+[답변]
+"""
+
+
+TREND_PROMPT = """
+당신은 AI 기술 동향을 분석하는 전문 애널리스트입니다.
+아래 제공된 AI타임스 최신 기사 내용을 기반으로만 답변하세요.
+
+답변 규칙:
+1. 반드시 제공된 기사 내용을 근거로만 답변하세요.
+2. 기사에 없는 내용은 "기사에서 확인되지 않았습니다"라고 답변하세요.
+3. 최근 AI 기술 트렌드를 중심으로 분석하세요.
+4. 반드시 아래 출력 형식을 그대로 따르세요.
+5. "핵심 AI 트렌드 3가지" 같은 별도 제목은 출력하지 마세요.
+
+답변 형식 예시:
+
+1. 핵심 트렌드 1
+   - 주요 내용 :
+   - 근거 기사 :
+   - 시장/산업적 의미 :
+
+
+2. 핵심 트렌드 2
+   - 주요 내용 :
+   - 근거 기사 :
+   - 시장/산업적 의미 :
+
+
+3. 핵심 트렌드 3
+   - 주요 내용 :
+   - 근거 기사 :
+   - 시장/산업적 의미 :
+
+
+4. 종합 의견
+   - 앞으로 주목할 포인트 :
+
+[참고 기사]
+{context}
+
+[질문]
+{question}
+
+[답변]
+"""
 
 
 def get_llm():
@@ -65,55 +104,106 @@ def get_llm():
 
 
 def format_docs(docs) -> str:
-    """검색된 청크를 프롬프트용 텍스트로 변환"""
     if not docs:
         return "검색된 참고 기사가 없습니다."
 
     result = ""
+
     for i, doc in enumerate(docs):
-        result += f"\n[기사 {i+1}] {doc.metadata.get('title', '')}\n"
+        title = doc.metadata.get("title", "제목 없음")
+        url = doc.metadata.get("url", "출처 없음")
+
+        result += f"\n[기사 {i + 1}] {title}\n"
         result += f"{doc.page_content}\n"
-        result += f"출처: {doc.metadata.get('url', '')}\n"
+        result += f"출처: {url}\n"
+
     return result
 
 
-def build_rag_chain():
-    """RAG 체인 구성"""
-    print("[리트리버] RAG 체인 구성 중...")
-
+def get_retriever(k: int = 5):
     vectorstore = load_chromadb()
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+    return vectorstore.as_retriever(search_kwargs={"k": k})
+
+
+def filter_docs_by_date(docs, start_date, end_date):
+    if not start_date or not end_date:
+        return docs
+
+    filtered = []
+
+    for doc in docs:
+        date_str = doc.metadata.get("published_date")
+
+        if not date_str:
+            filtered.append(doc)
+            continue
+
+        try:
+            doc_date = datetime.strptime(
+                date_str,
+                "%Y-%m-%d %H:%M"
+            ).date()
+
+            if start_date <= doc_date <= end_date:
+                filtered.append(doc)
+
+        except Exception:
+            filtered.append(doc)
+
+    return filtered
+
+
+def analyze_trend(start_date=None, end_date=None) -> str:
+    retriever = get_retriever(k=5)
+
+    docs = retriever.invoke(
+        "최근 AI 기술 트렌드 생성형 AI AI 에이전트 자동화 로봇 클라우드 반도체"
+    )
+
+    # 기간 필터링
+    docs = filter_docs_by_date(docs, start_date, end_date)
+    context = format_docs(docs)
 
     prompt = PromptTemplate(
         input_variables=["context", "question"],
-        template=SYSTEM_PROMPT,
+        template=TREND_PROMPT,
     )
 
-    llm = get_llm()
+    chain = prompt | get_llm() | StrOutputParser()
 
-    chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
+    return chain.invoke({
+        "context": context,
+        "question": "최근 AI 기술 트렌드를 분석해줘.",
+    })
+
+
+def recommend_by_industry(industry, start_date=None, end_date=None) -> str:
+    retriever = get_retriever(k=5)
+
+    # 검색에도 사용자가 선택한 산업을 그대로 사용
+    search_query = f"{industry} AI 생성형 AI 자동화 디지털전환 신규 사업"
+
+    docs = retriever.invoke(search_query)
+    
+    # 기간 필터링
+    docs = filter_docs_by_date(docs, start_date, end_date)
+    context = format_docs(docs)
+
+    prompt = PromptTemplate(
+        input_variables=["context", "industry", "question"],
+        template=INDUSTRY_PROMPT,
     )
 
-    print("[리트리버] RAG 체인 준비 완료!")
-    return chain
+    chain = prompt | get_llm() | StrOutputParser()
 
-
-def ask(chain, question: str) -> str:
-    """질문 입력 → 답변 반환"""
-    print(f"\n[질문] {question}")
-    print("[답변] 생성 중...\n")
-
-    answer = chain.invoke(question)
-    print(answer)
-    return answer
+    # 프롬프트에도 사용자가 선택한 산업을 그대로 주입
+    return chain.invoke({
+        "context": context,
+        "industry": industry,
+        "question": f"{industry} 산업에 적용 가능한 AI 기반 신규 사업 아이템을 추천해줘.",
+    })
 
 
 if __name__ == "__main__":
-    chain = build_rag_chain()
-
-    ask(chain, "최근 가장 주목받는 AI 기술 트렌드가 뭐야?")
-    ask(chain, "LG CNS가 추진할 만한 AI 사업 아이템 3가지 추천해줘")
+    print(analyze_trend())
+    print(recommend_by_industry("금융 IT"))

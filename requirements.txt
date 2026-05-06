@@ -1,26 +1,39 @@
 # crawling
 requests==2.31.0
 beautifulsoup4==4.12.3
- 
+pandas==2.2.2
+selenium
+webdriver-manager
+
 # LangChain
-langchain==0.2.16
+langchain==0.2.17
+langchain-core==0.2.43
+langchain-community==0.2.19
 langchain-openai==0.1.25
+langchain-text-splitters==0.2.4
+langchain-huggingface==0.0.3
 langchain-chroma==0.1.4
-langchain-groq
-langchain-community
- 
+langchain-groq==0.1.10
+
 # vector DB
-chromadb==0.5.0
- 
+chromadb==0.4.24
+
+# embedding
+sentence-transformers==3.0.1
+transformers==4.41.2
+
 # LLM
 openai==1.50.0
-sentence-transformers
- 
+
 # UI
 streamlit==1.38.0
- 
+
 # scheduler
 apscheduler==3.10.4
- 
-# envirment
+
+# environment
 python-dotenv==1.0.1
+
+# torch
+torch==2.8.0
+torchvision==0.23.0

@@ -1,14 +1,15 @@
-"""
-임베딩 + ChromaDB 저장 모듈 (HuggingFace 버전)
-임베딩: sentence-transformers (로컬)
-LLM: HuggingFace Inference API
-"""
-
-import os
 from dotenv import load_dotenv
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
+
+import os
+import warnings
+
+os.environ["ANONYMIZED_TELEMETRY"] = "False"
+os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
+
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 load_dotenv()
 
@@ -32,7 +33,7 @@ def get_embeddings() -> HuggingFaceEmbeddings:
 
 def save_to_chromadb(documents: list[Document]) -> Chroma:
     """청크를 임베딩 후 ChromaDB에 저장"""
-    print(f"[임베더] {len(documents)}개 청크 임베딩 중... (첫 실행은 모델 다운로드로 시간 걸려요)")
+    print(f"[임베더] {len(documents)}개 청크 임베딩 중...")
 
     embeddings = get_embeddings()
 
@@ -43,7 +44,7 @@ def save_to_chromadb(documents: list[Document]) -> Chroma:
         collection_name=COLLECTION_NAME,
     )
 
-    print(f"  → ChromaDB 저장 완료 ({CHROMA_DB_PATH})")
+    print(f"ChromaDB 저장 완료 ({CHROMA_DB_PATH})")
     return vectorstore
 
 
@@ -64,12 +65,12 @@ def load_chromadb() -> Chroma:
 def test_search(vectorstore: Chroma, query: str, k: int = 3):
     """검색 테스트"""
     print(f"\n[검색 테스트] 쿼리: '{query}'")
-    results = vectorstore.similarity_search(query, k=k)
+    # results = vectorstore.similarity_search(query, k=k)
 
-    for i, doc in enumerate(results):
-        print(f"\n--- 결과 {i+1} ---")
-        print(f"제목: {doc.metadata['title']}")
-        print(f"내용: {doc.page_content[:150]}...")
+    # for i, doc in enumerate(results):
+    #     print(f"\n--- 결과 {i+1} ---")
+    #     print(f"제목: {doc.metadata['title']}")
+    #     print(f"내용: {doc.page_content[:150]}...")
 
 
 if __name__ == "__main__":
@@ -83,7 +84,3 @@ if __name__ == "__main__":
 
     # 2. ChromaDB 저장
     vectorstore = save_to_chromadb(documents)
-
-    # 3. 검색 테스트
-    test_search(vectorstore, "LG CNS AI 사업")
-    test_search(vectorstore, "최근 AI 트렌드")
