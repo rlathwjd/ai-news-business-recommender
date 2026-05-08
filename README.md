@@ -20,3 +20,7 @@
 - python crawler/aitimes_crawler.py (크롤링)
 - python rag/embedder.py (임베딩)
 - python -m streamlit run app.py
+
+
+## 사이트 접속
+https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
