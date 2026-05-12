@@ -49,7 +49,16 @@ def save_to_chromadb(documents: list[Document]) -> Chroma:
         collection_name=COLLECTION_NAME,
     )
 
+    before_count = vectorstore._collection.count()
+    print(f"[확인] 저장 전 ChromaDB 청크 수: {before_count}")
+
     vectorstore.add_documents(documents)
+
+    after_count = vectorstore._collection.count()
+    print(f"[확인] 저장 후 ChromaDB 청크 수: {after_count}")
+
+    if after_count <= before_count:
+        raise RuntimeError("ChromaDB 저장 실패: 저장 후 count가 증가하지 않았습니다.")
 
     print("[임베더] 신규 문서 추가 완료")
     return vectorstore
@@ -93,6 +102,7 @@ def mark_articles_embedded(article_ids: list[int], db_path: str = DB_PATH):
     
     
 if __name__ == "__main__":
+
     sys.path.append(".")
 
     articles = load_unembedded_articles()
@@ -101,7 +111,15 @@ if __name__ == "__main__":
         print("[임베더] 임베딩할 신규 기사 없음")
     else:
         documents = chunk_articles(articles)
-        vectorstore = save_to_chromadb(documents)
 
-        article_ids = list({article["id"] for article in articles})
-        mark_articles_embedded(article_ids)
+        if not documents:
+            print("[임베더] 생성된 청크 없음. embedded 업데이트 생략")
+        else:
+            try:
+                vectorstore = save_to_chromadb(documents)
+
+                article_ids = list({article["id"] for article in articles})
+                mark_articles_embedded(article_ids)
+
+            except Exception as e:
+                print(f"[임베더] ChromaDB 저장 실패. embedded 업데이트 안 함: {e}")

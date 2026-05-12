@@ -367,4 +367,4 @@ def crawl(
     return new_results
 
 if __name__ == "__main__":
-    crawl(3)
+    crawl(10)
