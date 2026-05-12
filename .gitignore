@@ -9,9 +9,6 @@ venv/
 __pycache__/
 *.pyc
 
-# 데이터 (크롤링 결과)
-data/*.json
-data/raw/
 
 # 로그
 *.log

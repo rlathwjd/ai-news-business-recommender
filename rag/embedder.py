@@ -3,6 +3,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from pathlib import Path
+from rag.chunker import load_unembedded_articles, chunk_articles
+import sys
+import sqlite3
 
 import os
 import warnings
@@ -13,6 +16,8 @@ os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 load_dotenv()
+
+DB_PATH = "./data/articles.db"
 
 HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")
@@ -34,18 +39,19 @@ def get_embeddings() -> HuggingFaceEmbeddings:
 
 def save_to_chromadb(documents: list[Document]) -> Chroma:
     """청크를 임베딩 후 ChromaDB에 저장"""
-    print(f"[임베더] {len(documents)}개 청크 임베딩 중...")
+    print(f"[임베더] 신규 {len(documents)}개 청크 임베딩 중...")
 
     embeddings = get_embeddings()
 
-    vectorstore = Chroma.from_documents(
-        documents=documents,
-        embedding=embeddings,
+    vectorstore = Chroma(
         persist_directory=CHROMA_DB_PATH,
+        embedding_function=embeddings,
         collection_name=COLLECTION_NAME,
     )
 
-    print(f"ChromaDB 저장 완료 ({CHROMA_DB_PATH})")
+    vectorstore.add_documents(documents)
+
+    print("[임베더] 신규 문서 추가 완료")
     return vectorstore
 
 
@@ -66,22 +72,36 @@ def load_chromadb() -> Chroma:
 def test_search(vectorstore: Chroma, query: str, k: int = 3):
     """검색 테스트"""
     print(f"\n[검색 테스트] 쿼리: '{query}'")
-    # results = vectorstore.similarity_search(query, k=k)
-
-    # for i, doc in enumerate(results):
-    #     print(f"\n--- 결과 {i+1} ---")
-    #     print(f"제목: {doc.metadata['title']}")
-    #     print(f"내용: {doc.page_content[:150]}...")
 
 
+def mark_articles_embedded(article_ids: list[int], db_path: str = DB_PATH):
+    if not article_ids:
+        return
+
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    cur.executemany(
+        "UPDATE articles SET embedded = 1 WHERE id = ?",
+        [(article_id,) for article_id in article_ids]
+    )
+
+    conn.commit()
+    conn.close()
+
+    print(f"[임베더] {len(article_ids)}개 기사 embedded=1 업데이트 완료")
+    
+    
 if __name__ == "__main__":
-    import sys
     sys.path.append(".")
-    from rag.chunker import load_articles, chunk_articles
 
-    # 1. 기사 로드 + 청킹
-    articles = load_articles()
-    documents = chunk_articles(articles)
+    articles = load_unembedded_articles()
 
-    # 2. ChromaDB 저장
-    vectorstore = save_to_chromadb(documents)
+    if not articles:
+        print("[임베더] 임베딩할 신규 기사 없음")
+    else:
+        documents = chunk_articles(articles)
+        vectorstore = save_to_chromadb(documents)
+
+        article_ids = list({article["id"] for article in articles})
+        mark_articles_embedded(article_ids)

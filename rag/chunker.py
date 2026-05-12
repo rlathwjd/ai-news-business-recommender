@@ -1,22 +1,43 @@
 """
 기사 본문 청킹 모듈
-JSON으로 저장된 기사를 청크로 분할하고 메타데이터 태깅
+SQLite DB에 저장된 기사 중 임베딩되지 않은 기사를 청크로 분할
 """
 
-import json
+import sqlite3
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 
-def load_articles(json_path: str = "./data/raw_articles.json") -> list[dict]:
-    """크롤링된 기사 JSON 로드"""
-    with open(json_path, "r", encoding="utf-8") as f:
-        articles = json.load(f)
-    print(f"[청커] {len(articles)}개 기사 로드 완료")
+DB_PATH = "./data/articles.db"
+
+
+def load_unembedded_articles(db_path: str = DB_PATH) -> list[dict]:
+    """DB에서 아직 임베딩되지 않은 기사 로드"""
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, url, title, body, published_date, crawled_at
+        FROM articles
+        WHERE embedded = 0
+        ORDER BY id ASC
+    """)
+
+    rows = cur.fetchall()
+    conn.close()
+
+    articles = [dict(row) for row in rows]
+
+    print(f"[청커] 임베딩 대상 기사 {len(articles)}개 로드 완료")
     return articles
 
 
-def chunk_articles(articles: list[dict], chunk_size: int = 500, chunk_overlap: int = 50) -> list[Document]:
+def chunk_articles(
+    articles: list[dict],
+    chunk_size: int = 500,
+    chunk_overlap: int = 50
+) -> list[Document]:
     """기사 본문을 청크로 분할 + 메타데이터 태깅"""
 
     splitter = RecursiveCharacterTextSplitter(
@@ -26,6 +47,7 @@ def chunk_articles(articles: list[dict], chunk_size: int = 500, chunk_overlap: i
     )
 
     documents = []
+
     for article in articles:
         chunks = splitter.split_text(article["body"])
 
@@ -33,6 +55,7 @@ def chunk_articles(articles: list[dict], chunk_size: int = 500, chunk_overlap: i
             doc = Document(
                 page_content=chunk,
                 metadata={
+                    "article_id": article["id"],
                     "source": "aitimes",
                     "title": article["title"],
                     "url": article["url"],
@@ -49,10 +72,12 @@ def chunk_articles(articles: list[dict], chunk_size: int = 500, chunk_overlap: i
 
 
 if __name__ == "__main__":
-    articles = load_articles()
+    articles = load_unembedded_articles()
     docs = chunk_articles(articles)
 
-    # 샘플 출력
-    print("\n--- 샘플 청크 ---")
-    print(f"내용: {docs[0].page_content[:200]}")
-    print(f"메타데이터: {docs[0].metadata}")
+    if docs:
+        print("\n--- 샘플 청크 ---")
+        print(f"내용: {docs[0].page_content[:200]}")
+        print(f"메타데이터: {docs[0].metadata}")
+    else:
+        print("[청커] 청크 생성 대상 없음")
