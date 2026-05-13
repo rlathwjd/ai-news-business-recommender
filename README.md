@@ -11,7 +11,7 @@
 - Python, Streamlit
 - Selenium, BeautifulSoup
 - LangChain, ChromaDB
-- Groq API
+- Groq API(Llama 3.3)
 
 ## 환경 변수 설정
 - .env 파일에 GROQ_API_KEY="api_key" 입력
