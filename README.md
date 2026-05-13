@@ -9,6 +9,7 @@
 
 ## 기술 스택
 - Python, Streamlit
+- Selenium, BeautifulSoup
 - LangChain, ChromaDB
 - Groq API
 
