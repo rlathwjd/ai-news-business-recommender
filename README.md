@@ -12,15 +12,16 @@
 - LangChain, ChromaDB
 - Groq API
 
-## 실행 방법(터미널)
+## 환경 변수 설정
 - .env 파일에 GROQ_API_KEY="api_key" 입력
+
+## 실행 방법
 - py -3.12 -m venv venv (파이썬 3.12 설치 후 가상환경 생성)
 - venv/Scripts/activate (가상환경 활성화)
 - python -m pip install -r requirements.txt (필요 패키지 설치)
 - python -m crawler.crawl (크롤링)
 - python -m rag.embedder (임베딩)
 - python -m streamlit run app.py
-
 
 ## 사이트 접속
 https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
