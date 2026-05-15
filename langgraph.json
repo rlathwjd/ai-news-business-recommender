@@ -1,0 +1,9 @@
+{
+    "dependencies": [
+        "."
+    ],
+    "graphs": {
+        "news_graph": "./rag/retriever.py:news_graph"
+    },
+    "env": ".env"
+}

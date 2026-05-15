@@ -17,12 +17,20 @@
 - .env 파일에 GROQ_API_KEY="api_key" 입력
 
 ## 실행 방법
-- py -3.12 -m venv venv (파이썬 3.12 설치 후 가상환경 생성)
+- python -m venv venv (가상환경 생성)
 - venv/Scripts/activate (가상환경 활성화)
 - python -m pip install -r requirements.txt (필요 패키지 설치)
 - python -m crawler.crawl (크롤링)
 - python -m rag.embedder (임베딩)
 - python -m streamlit run app.py
+
+- python -m venv venv-studio(LangSmith Studio 전용 가상환경 생성)
+- venv-studio/Scripts/activate (가상환경 활성화)
+- python -m pip install -r dev-requirements.txt (LangSmith Studio 전용 필요 패키지 설치)
+- langgraph dev (LangGraph 서버 실행)
+- LangSmith(https://smith.langchain.com/) 접속
+- Studio 메뉴에서 연결 추가 후 Base URL 입력 (http://127.0.0.1:2024)
+
 
 ## 사이트 접속
 https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/

@@ -1,22 +1,33 @@
-# 환경 변수
+# environment variables / secrets
 .env
+.streamlit/secrets.toml
 
-# 가상환경
-.venv/
+# virtual environments
 venv/
+venv-studio/
+.venv/
+env/
 
-# 파이썬 캐시
+# Python cache
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 
+# local databases / vector stores
+chroma_db/
+*.db
+*.sqlite
+*.sqlite3
 
-# 로그
+# logs
 *.log
-chroma.log
+logs/
 
-# OS 파일
+# editor / OS
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
 
-# VSCode 설정 (선택)
-.vscode/
+# Selenium / driver cache
+.wdm/

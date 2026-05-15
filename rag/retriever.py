@@ -1,11 +1,15 @@
 import os
 import sys
+from datetime import datetime
+from typing import Optional, TypedDict, Literal
+
 from dotenv import load_dotenv
 
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_groq import ChatGroq
-from datetime import datetime
+
+from langgraph.graph import StateGraph, END
 
 sys.path.append(".")
 from rag.embedder import load_chromadb
@@ -90,9 +94,21 @@ TREND_PROMPT = """
 """
 
 
+class NewsState(TypedDict):
+    mode: Literal["trend", "industry"]
+    industry: Optional[str]
+    start_date: Optional[object]
+    end_date: Optional[object]
+    search_query: str
+    question: str
+    docs: list
+    context: str
+    answer: str
+
+
 def get_llm():
     groq_api_key = os.getenv("GROQ_API_KEY")
-     
+
     if not groq_api_key:
         raise ValueError("GROQ_API_KEY가 없습니다. .env 파일에 GROQ_API_KEY를 설정하세요.")
 
@@ -102,6 +118,11 @@ def get_llm():
         temperature=0.3,
         max_tokens=1024,
     )
+
+
+def get_retriever(k: int = 5):
+    vectorstore = load_chromadb()
+    return vectorstore.as_retriever(search_kwargs={"k": k})
 
 
 def format_docs(docs) -> str:
@@ -119,11 +140,6 @@ def format_docs(docs) -> str:
         result += f"출처: {url}\n"
 
     return result
-
-
-def get_retriever(k: int = 5):
-    vectorstore = load_chromadb()
-    return vectorstore.as_retriever(search_kwargs={"k": k})
 
 
 def filter_docs_by_date(docs, start_date, end_date):
@@ -154,72 +170,187 @@ def filter_docs_by_date(docs, start_date, end_date):
     return filtered
 
 
-def analyze_trend(start_date=None, end_date=None) -> str:
+def build_query(state: NewsState) -> NewsState:
+    mode = state["mode"]
+    industry = state.get("industry")
+
+    if mode == "trend":
+        search_query = "최근 AI 기술 트렌드 생성형 AI AI 에이전트 자동화 로봇 클라우드 반도체"
+        question = "최근 AI 기술 트렌드를 분석해줘."
+
+    else:
+        if not industry:
+            raise ValueError("산업별 사업 추천에는 industry 값이 필요합니다.")
+
+        search_query = f"{industry} AI 생성형 AI 자동화 디지털전환 신규 사업"
+        question = f"{industry} 산업에 적용 가능한 AI 기반 신규 사업 아이템을 추천해줘."
+
+    return {
+        **state,
+        "search_query": search_query,
+        "question": question,
+    }
+
+
+def retrieve_docs(state: NewsState) -> NewsState:
     retriever = get_retriever(k=5)
+    docs = retriever.invoke(state["search_query"])
 
-    docs = retriever.invoke(
-        "최근 AI 기술 트렌드 생성형 AI AI 에이전트 자동화 로봇 클라우드 반도체"
+    return {
+        **state,
+        "docs": docs,
+    }
+
+
+def filter_docs_node(state: NewsState) -> NewsState:
+    docs = filter_docs_by_date(
+        state["docs"],
+        state.get("start_date"),
+        state.get("end_date"),
     )
 
-    # 기간 필터링
-    docs = filter_docs_by_date(docs, start_date, end_date)
-    context = format_docs(docs)
+    return {
+        **state,
+        "docs": docs,
+    }
 
-    prompt = PromptTemplate(
-        input_variables=["context", "question"],
-        template=TREND_PROMPT,
-    )
 
-    chain = (
-        prompt
-        | get_llm()
-        | StrOutputParser()
-    ).with_config({
-        "run_name": "analyze_ai_trend",
-        "tags": ["ai-news", "trend-analysis", "groq", "llama-3.3"]
-    })
+def format_context(state: NewsState) -> NewsState:
+    context = format_docs(state["docs"])
 
-    return chain.invoke({
+    return {
+        **state,
         "context": context,
-        "question": "최근 AI 기술 트렌드를 분석해줘.",
-    })
+    }
+
+
+def generate_answer(state: NewsState) -> NewsState:
+    mode = state["mode"]
+
+    if mode == "trend":
+        prompt = PromptTemplate(
+            input_variables=["context", "question"],
+            template=TREND_PROMPT,
+        )
+
+        chain = (
+            prompt
+            | get_llm()
+            | StrOutputParser()
+        ).with_config({
+            "run_name": "generate_ai_trend_analysis",
+            "tags": ["ai-news", "trend-analysis", "langgraph", "groq", "llama-3.3"],
+            "metadata": {
+                "mode": mode,
+                "search_query": state["search_query"],
+            },
+        })
+
+        answer = chain.invoke({
+            "context": state["context"],
+            "question": state["question"],
+        })
+
+    else:
+        prompt = PromptTemplate(
+            input_variables=["context", "industry", "question"],
+            template=INDUSTRY_PROMPT,
+        )
+
+        chain = (
+            prompt
+            | get_llm()
+            | StrOutputParser()
+        ).with_config({
+            "run_name": "generate_ai_business_recommendation",
+            "tags": ["ai-news", "industry-recommendation", "rag", "langgraph", "groq", "llama-3.3"],
+            "metadata": {
+                "mode": mode,
+                "industry": state.get("industry"),
+                "search_query": state["search_query"],
+            },
+        })
+
+        answer = chain.invoke({
+            "context": state["context"],
+            "industry": state["industry"],
+            "question": state["question"],
+        })
+
+    return {
+        **state,
+        "answer": answer,
+    }
+
+
+def build_news_graph():
+    graph = StateGraph(NewsState)
+
+    graph.add_node("build_query", build_query)
+    graph.add_node("retrieve_docs", retrieve_docs)
+    graph.add_node("filter_docs_by_date", filter_docs_node)
+    graph.add_node("format_context", format_context)
+    graph.add_node("generate_answer", generate_answer)
+
+    graph.set_entry_point("build_query")
+
+    graph.add_edge("build_query", "retrieve_docs")
+    graph.add_edge("retrieve_docs", "filter_docs_by_date")
+    graph.add_edge("filter_docs_by_date", "format_context")
+    graph.add_edge("format_context", "generate_answer")
+    graph.add_edge("generate_answer", END)
+
+    return graph.compile()
+
+
+news_graph = build_news_graph()
+
+
+def analyze_trend(start_date=None, end_date=None) -> str:
+    result = news_graph.invoke(
+        {
+            "mode": "trend",
+            "industry": None,
+            "start_date": start_date,
+            "end_date": end_date,
+            "search_query": "",
+            "question": "",
+            "docs": [],
+            "context": "",
+            "answer": "",
+        },
+        config={
+            "run_name": "ai_trend_analysis_graph",
+            "tags": ["ai-news", "trend-analysis", "langgraph"],
+        },
+    )
+
+    return result["answer"]
 
 
 def recommend_by_industry(industry, start_date=None, end_date=None) -> str:
-    retriever = get_retriever(k=5)
-
-    # 검색에도 사용자가 선택한 산업을 그대로 사용
-    search_query = f"{industry} AI 생성형 AI 자동화 디지털전환 신규 사업"
-
-    docs = retriever.invoke(search_query)
-    
-    # 기간 필터링
-    docs = filter_docs_by_date(docs, start_date, end_date)
-    context = format_docs(docs)
-
-    prompt = PromptTemplate(
-        input_variables=["context", "industry", "question"],
-        template=INDUSTRY_PROMPT,
+    result = news_graph.invoke(
+        {
+            "mode": "industry",
+            "industry": industry,
+            "start_date": start_date,
+            "end_date": end_date,
+            "search_query": "",
+            "question": "",
+            "docs": [],
+            "context": "",
+            "answer": "",
+        },
+        config={
+            "run_name": "ai_business_recommendation_graph",
+            "tags": ["ai-news", "industry-recommendation", "langgraph"],
+            "metadata": {
+                "industry": industry,
+            },
+        },
     )
 
-    chain = (
-        prompt
-        | get_llm()
-        | StrOutputParser()
-    ).with_config({
-        "run_name": "recommend_ai_business_by_industry",
-        "tags": ["ai-news", "industry-recommendation", "rag", "groq", "llama-3.3"],
-        "metadata": {
-            "industry": industry,
-            "search_query": search_query,
-        }
-    })
-    # 프롬프트에도 사용자가 선택한 산업을 그대로 주입
-    return chain.invoke({
-        "context": context,
-        "industry": industry,
-        "question": f"{industry} 산업에 적용 가능한 AI 기반 신규 사업 아이템을 추천해줘.",
-    })
+    return result["answer"]
 
 
 if __name__ == "__main__":

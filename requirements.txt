@@ -9,18 +9,25 @@ webdriver-manager
 langchain==0.2.17
 langchain-core==0.2.43
 langchain-community==0.2.19
-langchain-openai==0.1.25
 langchain-text-splitters==0.2.4
-langchain-huggingface==0.0.3
-langchain-chroma==0.1.4
 langchain-groq==0.1.10
+langchain-chroma==0.1.4
+langchain-huggingface==0.0.3
+
+# LangGraph / LangSmith
+langgraph==0.2.60
+langsmith==0.1.147
 
 # vector DB
 chromadb==0.4.24
 
 # embedding
-sentence-transformers==3.0.1
+sentence-transformers==3.1.0
 transformers==4.41.2
+torch==2.3.1
+
+# validation
+pydantic==2.8.2
 
 # LLM
 openai==1.50.0
@@ -33,7 +40,3 @@ apscheduler==3.10.4
 
 # environment
 python-dotenv==1.0.1
-
-# torch
-torch==2.8.0
-torchvision==0.23.0
