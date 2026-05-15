@@ -2,28 +2,23 @@ import os
 import warnings
 from datetime import date, timedelta
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 import streamlit as st
+
+st.set_page_config(page_title="AI Business Recommender", layout="wide")
+
 from services.business_service import (
     analyze_trend,
     recommend_by_industry,
 )
-
-for key in [
-    "GROQ_API_KEY",
-    "LANGSMITH_TRACING",
-    "LANGSMITH_ENDPOINT",
-    "LANGSMITH_API_KEY",
-    "LANGSMITH_PROJECT",
-]:
-    if key in st.secrets:
-        os.environ[key] = str(st.secrets[key])
-
-st.set_page_config(page_title="AI Business Recommender", layout="wide")
 
 st.title("🤖 AI 뉴스 기반 사업 추천 시스템")
 st.markdown("최신 AI 뉴스 분석을 통해 트렌드를 분석하고 신규 사업 아이템을 추천합니다.")
@@ -38,7 +33,7 @@ with col_left:
         "분석 옵션",
         ["AI 트렌드 분석", "산업별 사업 추천"]
     )
-    
+
     industry = ""
 
     if mode == "산업별 사업 추천":
@@ -63,17 +58,13 @@ with col_right:
             "종료일",
             value=date.today()
         )
-        
+
 st.divider()
 
 run_button = st.button(
     "🚀 분석 실행",
     use_container_width=True
 )
-
-st.write("LANGSMITH_TRACING:", os.getenv("LANGSMITH_TRACING"))
-st.write("LANGSMITH_PROJECT:", os.getenv("LANGSMITH_PROJECT"))
-st.write("LANGSMITH_API_KEY exists:", bool(os.getenv("LANGSMITH_API_KEY")))
 
 if run_button:
     if start_date > end_date:

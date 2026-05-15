@@ -12,7 +12,6 @@ from rag.embedder import load_chromadb
 
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 LLM_MODEL = "llama-3.3-70b-versatile"
 
 
@@ -92,12 +91,14 @@ TREND_PROMPT = """
 
 
 def get_llm():
-    if not GROQ_API_KEY:
+    groq_api_key = os.getenv("GROQ_API_KEY")
+     
+    if not groq_api_key:
         raise ValueError("GROQ_API_KEY가 없습니다. .env 파일에 GROQ_API_KEY를 설정하세요.")
 
     return ChatGroq(
         model=LLM_MODEL,
-        groq_api_key=GROQ_API_KEY,
+        groq_api_key=groq_api_key,
         temperature=0.3,
         max_tokens=1024,
     )
