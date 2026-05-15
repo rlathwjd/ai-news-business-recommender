@@ -8,7 +8,7 @@
 - 산업별 사업 아이템 추천
 
 ## 기술 스택
-- Python, Streamlit
+- Python, Streamlit(Streamlit Community Cloud 서버에 배포)
 - Selenium, BeautifulSoup
 - LangChain, ChromaDB
 - Groq API(Llama 3.3)

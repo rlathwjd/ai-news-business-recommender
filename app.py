@@ -13,6 +13,16 @@ from services.business_service import (
     recommend_by_industry,
 )
 
+for key in [
+    "GROQ_API_KEY",
+    "LANGSMITH_TRACING",
+    "LANGSMITH_ENDPOINT",
+    "LANGSMITH_API_KEY",
+    "LANGSMITH_PROJECT",
+]:
+    if key in st.secrets:
+        os.environ[key] = str(st.secrets[key])
+
 st.set_page_config(page_title="AI Business Recommender", layout="wide")
 
 st.title("🤖 AI 뉴스 기반 사업 추천 시스템")
@@ -60,6 +70,10 @@ run_button = st.button(
     "🚀 분석 실행",
     use_container_width=True
 )
+
+st.write("LANGSMITH_TRACING:", os.getenv("LANGSMITH_TRACING"))
+st.write("LANGSMITH_PROJECT:", os.getenv("LANGSMITH_PROJECT"))
+st.write("LANGSMITH_API_KEY exists:", bool(os.getenv("LANGSMITH_API_KEY")))
 
 if run_button:
     if start_date > end_date:
