@@ -169,7 +169,14 @@ def analyze_trend(start_date=None, end_date=None) -> str:
         template=TREND_PROMPT,
     )
 
-    chain = prompt | get_llm() | StrOutputParser()
+    chain = (
+        prompt
+        | get_llm()
+        | StrOutputParser()
+    ).with_config({
+        "run_name": "analyze_ai_trend",
+        "tags": ["ai-news", "trend-analysis", "groq", "llama-3.3"]
+    })
 
     return chain.invoke({
         "context": context,
@@ -194,8 +201,18 @@ def recommend_by_industry(industry, start_date=None, end_date=None) -> str:
         template=INDUSTRY_PROMPT,
     )
 
-    chain = prompt | get_llm() | StrOutputParser()
-
+    chain = (
+        prompt
+        | get_llm()
+        | StrOutputParser()
+    ).with_config({
+        "run_name": "recommend_ai_business_by_industry",
+        "tags": ["ai-news", "industry-recommendation", "rag", "groq", "llama-3.3"],
+        "metadata": {
+            "industry": industry,
+            "search_query": search_query,
+        }
+    })
     # 프롬프트에도 사용자가 선택한 산업을 그대로 주입
     return chain.invoke({
         "context": context,
