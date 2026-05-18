@@ -31,11 +31,14 @@ https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
 - LangGraph
 - LangSmith Studio
 
-## 3. 환경 변수 설정
-- .env 파일에 GROQ_API_KEY=api_key (로컬 개발 및 테스트만 하려면 이 줄만 추가)
+## 3. 환경 변수 설정 (.env 파일에 추가)
+- GROQ_API_KEY=api_key (로컬 개발 및 테스트만 하려면 이 줄만 추가)
 - LANGSMITH_TRACING=true
-- LAGNSMITH_API_KEY=langsmith_api_key
+- LANGSMITH_API_KEY=langsmith_api_key
 - LANGSMITH_PROJECT=project_name
+- Streamlit Sharing 접속 (https://share.streamlit.io/)
+- My apps에서 프로젝트 Settings-Secrets에 위 4가지 따옴표로 묶어서 입력
+- ex) GROQ_API_KEY="groq_api_key"
 
 ## 4. 로컬 개발 및 테스트
 - python -m venv venv (가상환경 생성)
