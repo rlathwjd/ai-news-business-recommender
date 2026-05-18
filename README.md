@@ -60,4 +60,4 @@ https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
 
 ## 6. 데이터 업데이트 (Github Actions)
 - 자동 실행 : 매주 월요일 오전 9시 AI타임스 최신 기사 크롤링 및 임베딩
-- 수동 실행 : GitHub Actions의 'Run workflow' 버튼 클릭 
+- 수동 실행 : Github Actions의 'Run workflow' 버튼 클릭 
