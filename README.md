@@ -14,7 +14,7 @@ https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
 ### 서비스 구현
 - Python
 - Streamlit
-- Streamlit Community Cloud
+- Supabase
 
 ### 데이터 수집
 - Selenium
@@ -22,22 +22,21 @@ https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
 
 ### RAG / LLM
 - LangChain
-- ChromaDB
 - Groq API
 - Llama 3.3
 
 ### 모니터링
 - LangSmith
-- LangGraph
-- LangSmith Studio
 
 ## 3. 환경 변수 설정 (.env 파일에 추가)
-- GROQ_API_KEY=api_key (로컬 개발 및 테스트만 하려면 이 줄만 추가)
+- GROQ_API_KEY=api_key
+- NEXT_PUBLIC_SUPABASE_URL=supabase_url
+- SUPABASE_SERVICE_ROLE_KEY=supbase_service_role_key
 - LANGSMITH_TRACING=true
 - LAGNSMITH_API_KEY=langsmith_api_key
 - LANGSMITH_PROJECT=project_name
 - Streamlit Sharing 접속 (https://share.streamlit.io/)
-- My apps에서 프로젝트 Settings-Secrets에 위 4가지 따옴표로 묶어서 입력
+- My apps에서 프로젝트 Settings-Secrets에 위 6가지 따옴표로 묶어서 입력
 - ex) GROQ_API_KEY="groq_api_key"
 
 ## 4. 로컬 개발 및 테스트
@@ -55,3 +54,7 @@ https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
 - langgraph dev (LangGraph 서버 실행)
 - LangSmith 접속 (https://smith.langchain.com/)
 - Studio 메뉴에서 연결 추가 후 Base URL 입력 (http://127.0.0.1:2024)
+
+## 6. 데이터 업데이트 (Github Actions)
+- 자동 실행 : 매주 월요일 오전 9시 AI타임스 최신 기사 크롤링 및 임베딩
+- 수동 실행 : GitHub Actions의 'Run workflow' 버튼 클릭 

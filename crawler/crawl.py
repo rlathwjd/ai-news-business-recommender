@@ -1,87 +1,163 @@
 """
 AI타임스 AI산업 기사 크롤러
+- AI타임스 목록 페이지에서 기사 URL 수집
+- Supabase articles 테이블에서 기존 URL 중복 확인
+- 신규 기사 본문 수집
+- Supabase articles 테이블에 신규 기사 저장
 """
 
 import time
-import json
 import os
 import re
+import html
 from datetime import datetime
+from urllib.parse import urljoin, urlparse, parse_qs
+
 import requests
 from bs4 import BeautifulSoup
+
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
-import html
-import sqlite3
+from selenium.common.exceptions import (
+    UnexpectedAlertPresentException,
+    NoSuchElementException,
+    TimeoutException,
+)
+from webdriver_manager.chrome import ChromeDriverManager
 
+from dotenv import load_dotenv
+from db.supabase_client import get_supabase
+
+
+load_dotenv()
 
 BASE_URL = "https://www.aitimes.com"
 LIST_URL = "https://www.aitimes.com/news/articleList.html?sc_multi_code=S2&view_type=sm"
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36"
+    )
+}
 
 
-def extract_article_urls_from_page(driver, existing_urls, seen):
-    soup = BeautifulSoup(driver.page_source, "html.parser")
+def normalize_article_url(href: str) -> str:
+    """
+    AI타임스 기사 URL을 articleView의 idxno 기준으로 정규화합니다.
+    같은 기사인데 URL 형태가 달라 중복으로 잡히는 문제를 줄입니다.
+    """
+    full_url = urljoin(BASE_URL, href)
 
-    articles = []
-    found_existing = False
+    parsed = urlparse(full_url)
+    query = parse_qs(parsed.query)
 
-    items = soup.select("ul.altlist-webzine li.altlist-webzine-item")
+    idxno = query.get("idxno", [None])[0]
 
-    for item in items:
-        link = item.select_one("a[href*='articleView']")
-        if not link:
-            continue
+    if idxno:
+        return f"{BASE_URL}/news/articleView.html?idxno={idxno}"
 
-        href = link.get("href", "")
-        title = link.get_text(strip=True)
-
-        if not title:
-            img = link.select_one("img")
-            if img:
-                title = img.get("alt", "").strip()
-                
-        title = html.unescape(title)
-
-        if not href or not title:
-            continue
-
-        full_url = BASE_URL + href if href.startswith("/") else href
-
-        if full_url in existing_urls:
-            found_existing = True
-            break
-
-        if full_url in seen:
-            continue
-
-        seen.add(full_url)
-
-        articles.append({
-            "url": full_url,
-            "title": title
-        })
-
-    return articles, found_existing
+    return full_url.split("#")[0]
 
 
-def get_article_urls(existing_urls: set, max_clicks: int = 10) -> list[dict]:
-    print("[크롤러] AI타임스 목록 페이지 접속 중...")
-
+def create_driver() -> webdriver.Chrome:
+    """Selenium Chrome Driver 생성"""
     options = Options()
-    options.add_argument("--headless")
+    options.add_argument("--headless=new")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-    driver = webdriver.Chrome(
+    return webdriver.Chrome(
         service=Service(ChromeDriverManager().install()),
-        options=options
+        options=options,
     )
 
+
+def extract_title_from_item(item) -> str:
+    """
+    기사 카드에서 제목 후보를 여러 방식으로 추출합니다.
+    제목이 없어도 신규 URL이면 버리지 않도록 마지막에는 '제목 없음'을 반환합니다.
+    """
+    title_candidates = []
+
+    article_links = item.select("a[href*='articleView']")
+
+    for link in article_links:
+        text = link.get_text(" ", strip=True)
+        if text:
+            title_candidates.append(text)
+
+        img = link.select_one("img")
+        if img:
+            alt = img.get("alt", "").strip()
+            if alt:
+                title_candidates.append(alt)
+
+    title_tag = item.select_one(
+        "h2, h3, strong, .altlist-title, .altlist-titles, .titles"
+    )
+    if title_tag:
+        text = title_tag.get_text(" ", strip=True)
+        if text:
+            title_candidates.append(text)
+
+    if not title_candidates:
+        return "제목 없음"
+
+    title = max(title_candidates, key=len)
+    return html.unescape(title).strip() or "제목 없음"
+
+
+def get_existing_urls() -> set[str]:
+    """
+    Supabase articles 테이블에서 기존 URL 전체를 가져옵니다.
+    URL은 크롤링 URL과 같은 기준으로 정규화합니다.
+    """
+    supabase = get_supabase()
+
+    urls = set()
+    page_size = 1000
+    start = 0
+
+    while True:
+        result = (
+            supabase.table("articles")
+            .select("url")
+            .range(start, start + page_size - 1)
+            .execute()
+        )
+
+        rows = result.data or []
+
+        for row in rows:
+            url = row.get("url")
+            if url:
+                urls.add(normalize_article_url(url))
+
+        if len(rows) < page_size:
+            break
+
+        start += page_size
+
+    return urls
+
+
+def get_article_urls(existing_urls: set[str], max_clicks: int | None = 30) -> list[dict]:
+    """
+    AI타임스 목록 페이지에서 신규 기사 URL만 수집합니다.
+
+    기준:
+    - existing_urls: Supabase에 이미 저장된 URL
+    - seen: 이번 크롤링 실행 중 이미 확인한 URL
+    - DB에도 없고 seen에도 없으면 신규 기사
+    """
+    print("[크롤러] AI타임스 목록 페이지 접속 중...")
+
+    driver = create_driver()
     driver.get(LIST_URL)
     time.sleep(2)
 
@@ -90,114 +166,165 @@ def get_article_urls(existing_urls: set, max_clicks: int = 10) -> list[dict]:
 
     def extract_articles():
         soup = BeautifulSoup(driver.page_source, "html.parser")
+        items = soup.select("ul.altlist-webzine li.altlist-webzine-item")
+
         articles = []
-        found_existing = False
 
-        links = soup.select("ul.altlist-webzine a[href*='articleView']")
+        total_items = 0
+        existing_count = 0
+        seen_count = 0
+        new_count = 0
+        skipped_count = 0
 
-        for link in links:
+        for item in items:
+            total_items += 1
+
+            link = (
+                item.select_one("a.altlist-image[href*='articleView']")
+                or item.select_one("a[href*='articleView']")
+            )
+
+            if not link:
+                skipped_count += 1
+                continue
+
             href = link.get("href", "")
-            full_url = BASE_URL + href if href.startswith("/") else href
+            if not href:
+                skipped_count += 1
+                continue
 
+            full_url = normalize_article_url(href)
+
+            # 이번 실행에서 이미 처리한 URL이면 중복
             if full_url in seen:
+                seen_count += 1
                 continue
 
+            # Supabase에 이미 있는 URL이면 기존 기사
             if full_url in existing_urls:
-                found_existing = True
-                break
-
-            title = link.get_text(strip=True)
-
-            if not title:
-                img = link.select_one("img")
-                if img:
-                    title = img.get("alt", "").strip()
-
-            title = html.unescape(title)
-
-            if not full_url or not title:
+                seen.add(full_url)
+                existing_count += 1
                 continue
+
+            # 여기까지 왔으면 신규 기사
+            title = extract_title_from_item(item)
 
             seen.add(full_url)
+            new_count += 1
 
-            articles.append({
-                "url": full_url,
-                "title": title
-            })
-
-        return articles, found_existing
-
-    first_articles, found_existing = extract_articles()
-    all_articles.extend(first_articles)
-
-    print(f"  → 초기 기사 {len(first_articles)}개 수집")
-
-    if found_existing:
-        print("  → 기존 기사 발견. 종료")
-        driver.quit()
-        return all_articles
-
-    for i in range(max_clicks):
-        try:
-            before_count = len(
-                driver.find_elements(
-                    By.CSS_SELECTOR,
-                    "ul.altlist-webzine a[href*='articleView']"
-                )
+            articles.append(
+                {
+                    "url": full_url,
+                    "title": title,
+                }
             )
 
-            more_button = driver.find_element(By.CSS_SELECTOR, "button.list-btn-more")
+        stats = {
+            "total_items": total_items,
+            "existing": existing_count,
+            "seen": seen_count,
+            "new": new_count,
+            "skipped": skipped_count,
+        }
 
-            driver.execute_script(
-                "arguments[0].scrollIntoView({block: 'center'});",
-                more_button
-            )
+        return articles, stats
 
-            time.sleep(1)
-            driver.execute_script("arguments[0].click();", more_button)
+    try:
+        first_articles, stats = extract_articles()
+        all_articles.extend(first_articles)
 
-            WebDriverWait(driver, 10).until(
-                lambda d: len(
-                    d.find_elements(
-                        By.CSS_SELECTOR,
-                        "ul.altlist-webzine a[href*='articleView']"
-                    )
-                ) > before_count
-            )
+        print(
+            f"  → 초기 신규 기사 {len(first_articles)}개 수집 "
+            f"(전체 기사카드 {stats['total_items']} / 기존 {stats['existing']} / "
+            f"중복 {stats['seen']} / 제외 {stats['skipped']})"
+        )
 
-            new_articles, found_existing = extract_articles()
-            all_articles.extend(new_articles)
+        click_count = 0
 
-            print(
-                f"  → 더보기 {i + 1}회 클릭: "
-                f"신규 {len(new_articles)}개 / 누적 {len(all_articles)}개"
-            )
-
-            if found_existing:
-                print("  → 기존 기사 발견. 종료")
+        while True:
+            if max_clicks is not None and click_count >= max_clicks:
+                print(f"  → 최대 더보기 클릭 수 {max_clicks}회 도달. 종료")
                 break
 
-        except Exception as e:
-            print(f"  → 더보기 실패: {e}")
-            break
+            try:
+                before_count = len(
+                    driver.find_elements(
+                        By.CSS_SELECTOR,
+                        "ul.altlist-webzine li.altlist-webzine-item",
+                    )
+                )
 
-    driver.quit()
+                more_button = driver.find_element(
+                    By.CSS_SELECTOR,
+                    "button.list-btn-more",
+                )
 
-    print(f"  → 총 {len(all_articles)}개 기사 URL 추출")
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({block: 'center'});",
+                    more_button,
+                )
+
+                time.sleep(1)
+                driver.execute_script("arguments[0].click();", more_button)
+
+                WebDriverWait(driver, 10).until(
+                    lambda d: len(
+                        d.find_elements(
+                            By.CSS_SELECTOR,
+                            "ul.altlist-webzine li.altlist-webzine-item",
+                        )
+                    )
+                    > before_count
+                )
+
+                click_count += 1
+
+                new_articles, stats = extract_articles()
+                all_articles.extend(new_articles)
+
+                print(
+                    f"  → 더보기 {click_count}회 클릭: "
+                    f"신규 {len(new_articles)}개 / 누적 {len(all_articles)}개 "
+                    f"(전체 기사카드 {stats['total_items']} / 기존 {stats['existing']} / "
+                    f"중복 {stats['seen']} / 제외 {stats['skipped']})"
+                )
+
+            except UnexpectedAlertPresentException:
+                try:
+                    alert = driver.switch_to.alert
+                    print(f"  → 더보기 종료: 사이트 알림 - {alert.text}")
+                    alert.accept()
+                except Exception:
+                    print("  → 더보기 종료: 사이트 알림 발생")
+                break
+
+            except (NoSuchElementException, TimeoutException):
+                print("  → 더보기 버튼이 없거나 추가 기사 로딩이 없어 종료")
+                break
+
+            except Exception as e:
+                print(f"  → 더보기 종료 또는 실패: {e}")
+                break
+
+    finally:
+        driver.quit()
+
+    print(f"  → 총 {len(all_articles)}개 신규 기사 URL 추출")
     return all_articles
 
 
 def extract_published_date(soup: BeautifulSoup) -> str:
-    """기사 입력 날짜 추출: 2026-05-06 13:58 형태로 반환"""
+    """
+    기사 입력 날짜 추출
+    반환 예: 2026-05-06 13:58
+    """
     published_date = "날짜 미상"
 
-    # 1순위: 업데이트 기사에서 입력 날짜가 별도 div에 있는 경우
     date_tag = soup.select_one("div.info-update-origin")
 
     if date_tag:
         raw_text = date_tag.get_text(" ", strip=True)
     else:
-        # 2순위: breadcrumbs 안의 li 중 "입력"이 들어간 li 찾기
         raw_text = ""
 
         li_tags = soup.select("ul.breadcrumbs li")
@@ -212,7 +339,7 @@ def extract_published_date(soup: BeautifulSoup) -> str:
     if raw_text:
         match = re.search(
             r"20\d{2}[.\-/]\d{2}[.\-/]\d{2}\s+\d{2}:\d{2}",
-            raw_text
+            raw_text,
         )
 
         if match:
@@ -225,23 +352,53 @@ def extract_published_date(soup: BeautifulSoup) -> str:
     return published_date
 
 
+def extract_title_from_article_page(soup: BeautifulSoup, fallback_title: str) -> str:
+    """
+    목록에서 제목을 못 가져온 경우 기사 상세 페이지에서 제목을 보완합니다.
+    """
+    title_tag = (
+        soup.select_one("h1.heading")
+        or soup.select_one("h1.article-head-title")
+        or soup.select_one("h1")
+        or soup.select_one("meta[property='og:title']")
+    )
+
+    if title_tag:
+        if title_tag.name == "meta":
+            title = title_tag.get("content", "").strip()
+        else:
+            title = title_tag.get_text(" ", strip=True)
+
+        title = html.unescape(title).strip()
+
+        if title:
+            return title
+
+    return fallback_title
+
+
 def scrape_article(url: str, title: str) -> dict | None:
-    """개별 기사 본문 크롤링"""
+    """
+    개별 기사 본문 크롤링
+    """
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.encoding = "utf-8"
+
         soup = BeautifulSoup(response.text, "html.parser")
 
-        # 본문 추출
+        # 상세 페이지에서 제목 보완
+        title = extract_title_from_article_page(soup, title)
+
         content_area = (
             soup.select_one("div#article-view-content-div")
             or soup.select_one("div.article-body")
         )
+
         if not content_area:
             print(f"  ⚠ 본문 못 찾음: {title[:30]}")
             return None
 
-        # 불필요한 태그 제거
         for tag in content_area.select("script, style, figure, .ad, iframe"):
             tag.decompose()
 
@@ -251,7 +408,6 @@ def scrape_article(url: str, title: str) -> dict | None:
             print(f"  ⚠ 본문 너무 짧음: {title[:30]}")
             return None
 
-        # 날짜 추출
         published_date = extract_published_date(soup)
 
         return {
@@ -266,78 +422,64 @@ def scrape_article(url: str, title: str) -> dict | None:
         print(f"  ❌ 오류 ({title[:30]}): {e}")
         return None
 
-DB_PATH = "./data/articles.db"
 
-def init_db(db_path: str = DB_PATH):
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+def save_articles_to_db(articles: list[dict]):
+    """
+    신규 기사 목록을 Supabase articles 테이블에 저장합니다.
+    url 컬럼에 UNIQUE 제약조건이 있어야 중복 저장이 방지됩니다.
+    """
+    if not articles:
+        print("  → 저장할 신규 기사 없음")
+        return
 
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
+    supabase = get_supabase()
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS articles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            url TEXT UNIQUE,
-            title TEXT,
-            body TEXT,
-            published_date TEXT,
-            crawled_at TEXT,
-            embedded INTEGER DEFAULT 0
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
-def get_existing_urls(db_path: str = DB_PATH) -> set:
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-
-    cur.execute("SELECT url FROM articles")
-    urls = {row[0] for row in cur.fetchall()}
-
-    conn.close()
-    return urls
-
-
-def save_articles_to_db(articles: list[dict], db_path: str = DB_PATH):
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
+    payload = []
 
     for article in articles:
-        cur.execute("""
-            INSERT OR IGNORE INTO articles (
-                url, title, body, published_date, crawled_at, embedded
+        payload.append(
+            {
+                "url": article["url"],
+                "title": article["title"],
+                "body": article["body"],
+                "published_date": article["published_date"],
+                "crawled_at": article["crawled_at"],
+                "embedded": False,
+            }
+        )
+
+    try:
+        result = (
+            supabase.table("articles")
+            .upsert(
+                payload,
+                on_conflict="url",
+                ignore_duplicates=True,
             )
-            VALUES (?, ?, ?, ?, ?, 0)
-        """, (
-            article["url"],
-            article["title"],
-            article["body"],
-            article["published_date"],
-            article["crawled_at"],
-        ))
+            .execute()
+        )
 
-    conn.commit()
-    conn.close()
+        saved_count = len(result.data or [])
 
-def crawl(
-    max_clicks: int = 10000,
-    db_path: str = DB_PATH
-) -> list[dict]:
+        print(f"  → Supabase 저장 요청 {len(payload)}개")
+        print(f"  → Supabase 신규 저장 {saved_count}개")
 
+    except Exception as e:
+        print(f"  ❌ Supabase 저장 실패: {e}")
+        raise
+
+
+def crawl(max_clicks: int | None = 30) -> list[dict]:
     print("=" * 40)
     print("AI타임스 크롤링 시작")
     print("=" * 40)
 
-    init_db(db_path)
-
-    existing_urls = get_existing_urls(db_path)
+    existing_urls = get_existing_urls()
+    print(f"[크롤러] Supabase 기존 기사 수: {len(existing_urls)}개")
 
     article_list = get_article_urls(
         existing_urls=existing_urls,
-        max_clicks=max_clicks
+        max_clicks=max_clicks,
     )
 
     print("\n[크롤러] 기사 본문 수집 중...")
@@ -352,7 +494,7 @@ def crawl(
 
         data = scrape_article(
             article["url"],
-            article["title"]
+            article["title"],
         )
 
         if data:
@@ -360,11 +502,12 @@ def crawl(
 
         time.sleep(0.5)
 
-    save_articles_to_db(new_results, db_path)
+    save_articles_to_db(new_results)
 
-    print(f"\n✅ 신규 {len(new_results)}개 기사 DB 저장 완료")
+    print(f"\n✅ 신규 {len(new_results)}개 기사 본문 수집 완료")
 
     return new_results
+
 
 if __name__ == "__main__":
     crawl(10)

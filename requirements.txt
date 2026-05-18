@@ -18,8 +18,8 @@ langchain-huggingface==0.0.3
 langgraph==0.2.60
 langsmith==0.1.147
 
-# vector DB
-chromadb==0.4.24
+# DB
+supabase==2.10.0
 
 # embedding
 sentence-transformers==3.1.0

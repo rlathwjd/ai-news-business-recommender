@@ -14,10 +14,11 @@ __pycache__/
 *$py.class
 
 # local databases / vector stores
-chroma_db/
-*.db
-*.sqlite
-*.sqlite3
+# data
+# chroma_db/
+# *.db
+# *.sqlite
+# *.sqlite3
 
 # logs
 *.log
