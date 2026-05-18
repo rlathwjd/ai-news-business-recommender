@@ -15,6 +15,18 @@ import streamlit as st
 
 st.set_page_config(page_title="AI Business Recommender", layout="wide")
 
+# Streamlit Secrets → 환경변수 주입
+for key in [
+    "GROQ_API_KEY",
+    "LANGSMITH_TRACING",
+    "LANGSMITH_API_KEY",
+    "LANGSMITH_PROJECT",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+]:
+    if key in st.secrets:
+        os.environ[key] = str(st.secrets[key])
+        
 from services.business_service import (
     analyze_trend,
     recommend_by_industry,

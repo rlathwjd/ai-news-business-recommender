@@ -29,7 +29,7 @@ https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
 - LangSmith
 
 ## 3. 환경 변수 설정
-[.env 파일에 추가]
+[.env 파일에 추가] - 로컬
 - GROQ_API_KEY=api_key
 - NEXT_PUBLIC_SUPABASE_URL=supabase_url
 - SUPABASE_SERVICE_ROLE_KEY=supabase_service_role_key
@@ -37,7 +37,7 @@ https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
 - LANGSMITH_API_KEY=langsmith_api_key
 - LANGSMITH_PROJECT=project_name
   
-[Streamlit Sharing 접속] 
+[Streamlit Sharing 접속] - 배포
 - https://share.streamlit.io/
 - My apps에서 프로젝트 Settings-Secrets에 위 6가지 따옴표로 묶어서 입력
 - ex) GROQ_API_KEY="groq_api_key"
