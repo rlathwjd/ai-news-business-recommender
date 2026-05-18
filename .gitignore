@@ -13,13 +13,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# local databases / vector stores
-# data
-# chroma_db/
-# *.db
-# *.sqlite
-# *.sqlite3
-
 # logs
 *.log
 logs/
