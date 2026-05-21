@@ -1,10 +1,9 @@
-# environment variables / secrets
+# environment variables
 .env
-.streamlit/secrets.toml
 
 # virtual environments
 venv/
-venv-studio/
+venv-langsmith/
 .venv/
 env/
 

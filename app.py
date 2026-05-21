@@ -1,10 +1,27 @@
 import os
 import warnings
 from datetime import date, timedelta
-
 from dotenv import load_dotenv
 
+# 1. 로컬 실행용 .env 로드
 load_dotenv()
+
+# 2. Streamlit Cloud Secrets가 있으면 환경변수에 주입
+SECRET_KEYS = [
+    "GROQ_API_KEY",
+    "LANGSMITH_TRACING",
+    "LANGSMITH_API_KEY",
+    "LANGSMITH_PROJECT",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+]
+
+for key in SECRET_KEYS:
+    try:
+        if key in st.secrets:
+            os.environ[key] = str(st.secrets[key])
+    except Exception:
+        pass
 
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
@@ -15,17 +32,7 @@ import streamlit as st
 
 st.set_page_config(page_title="AI Business Recommender", layout="wide")
 
-# Streamlit Secrets → 환경변수 주입
-for key in [
-    "GROQ_API_KEY",
-    "LANGSMITH_TRACING",
-    "LANGSMITH_API_KEY",
-    "LANGSMITH_PROJECT",
-    "NEXT_PUBLIC_SUPABASE_URL",
-    "SUPABASE_SERVICE_ROLE_KEY",
-]:
-    if key in st.secrets:
-        os.environ[key] = str(st.secrets[key])
+
         
 from services.business_service import (
     analyze_trend,

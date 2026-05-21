@@ -51,9 +51,9 @@ https://ai-news-business-recommender-ezuhhysyrrg36xjy6wjkfq.streamlit.app/
 - python -m streamlit run app.py
 
 ## 5. LangSmith 연동
-- python -m venv venv-studio (LangSmith Studio 전용 가상환경 생성)
-- venv-studio/Scripts/activate (가상환경 활성화)
-- python -m pip install -r dev-requirements.txt (LangSmith Studio 전용 필요 패키지 설치)
+- python -m venv venv-langsmith (LangSmith Studio 전용 가상환경 생성)
+- venv-langsmith/Scripts/activate (가상환경 활성화)
+- python -m pip install -r langsmith-requirements.txt (LangSmith Studio 전용 필요 패키지 설치)
 - langgraph dev (LangGraph 서버 실행)
 - LangSmith 접속 (https://smith.langchain.com/)
 - Studio 메뉴에서 연결 추가 후 Base URL 입력 (http://127.0.0.1:2024)
