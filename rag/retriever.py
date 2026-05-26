@@ -185,14 +185,18 @@ def build_query(state: NewsState) -> NewsState:
     industry = state.get("industry")
 
     if mode == "trend":
-        search_query = "최근 AI 기술 트렌드 생성형 AI AI 에이전트 자동화 로봇 클라우드 반도체"
+        search_query = (
+        "최신 AI 기술 트렌드 생성형 AI AI 에이전트 멀티모달 LLM "
+        "자동화 로봇 반도체 온디바이스 AI 기업 AI 도입 "
+        "AI 서비스 산업 변화 기술 동향"
+    )
         question = "최근 AI 기술 트렌드를 분석해줘."
 
     else:
         if not industry:
             raise ValueError("산업별 사업 추천에는 industry 값이 필요합니다.")
 
-        search_query = f"{industry} AI 생성형 AI 자동화 디지털전환 신규 사업"
+        search_query = f"{industry} AI 활용 사례 생성형 AI 에이전트 디지털전환"
         question = f"{industry} 산업에 적용 가능한 AI 기반 신규 사업 아이템을 추천해줘."
 
     return {
